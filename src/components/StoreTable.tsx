@@ -53,10 +53,10 @@ export default function StoreTable({
     useState<Store>({
       店舗名: "",
       店舗住所: "",
-      規定コール数: "",
+      規定コール数: 0,
       担当者: "",
-      緯度: "",
-      経度: "",
+      緯度: undefined,
+      経度: undefined,
     });
 
   // =========================
@@ -135,10 +135,10 @@ export default function StoreTable({
     setNewStore({
       店舗名: "",
       店舗住所: "",
-      規定コール数: "",
+      規定コール数: 0,
       担当者: "",
-      緯度: "",
-      経度: "",
+      緯度: undefined,
+      経度: undefined,
     });
 
     setShowAddForm(true);
@@ -164,12 +164,50 @@ export default function StoreTable({
     value: string
   ) => {
 
-    setNewStore(
-      (current) => ({
+    setNewStore((current) => {
+
+      if (field === "規定コール数") {
+
+        return {
+          ...current,
+          規定コール数:
+            value === ""
+              ? 0
+              : Number(value),
+        };
+
+      }
+
+      if (field === "緯度") {
+
+        return {
+          ...current,
+          緯度:
+            value === ""
+              ? undefined
+              : Number(value),
+        };
+
+      }
+
+      if (field === "経度") {
+
+        return {
+          ...current,
+          経度:
+            value === ""
+              ? undefined
+              : Number(value),
+        };
+
+      }
+
+      return {
         ...current,
         [field]: value,
-      })
-    );
+      };
+
+    });
 
   };
 
@@ -179,11 +217,7 @@ export default function StoreTable({
 
   const handleAdd = async () => {
 
-    // 必須チェック
-
-    if (
-      !newStore.店舗名.trim()
-    ) {
+    if (!newStore.店舗名.trim()) {
 
       alert(
         "店舗名を入力してください。"
@@ -193,9 +227,7 @@ export default function StoreTable({
 
     }
 
-    if (
-      !newStore.店舗住所.trim()
-    ) {
+    if (!newStore.店舗住所.trim()) {
 
       alert(
         "店舗住所を入力してください。"
@@ -205,9 +237,7 @@ export default function StoreTable({
 
     }
 
-    if (
-      !newStore.担当者.trim()
-    ) {
+    if (!newStore.担当者.trim()) {
 
       alert(
         "担当者を入力してください。"
@@ -222,6 +252,7 @@ export default function StoreTable({
       setSaving(true);
 
       await addStore({
+
         店舗名:
           newStore.店舗名.trim(),
 
@@ -229,16 +260,17 @@ export default function StoreTable({
           newStore.店舗住所.trim(),
 
         規定コール数:
-          newStore.規定コール数.trim(),
+          newStore.規定コール数,
 
         担当者:
           newStore.担当者.trim(),
 
         緯度:
-          newStore.緯度?.trim(),
+          newStore.緯度,
 
         経度:
-          newStore.経度?.trim(),
+          newStore.経度,
+
       });
 
       alert(
@@ -247,7 +279,6 @@ export default function StoreTable({
 
       setShowAddForm(false);
 
-      // Firebaseから最新データを再取得
       window.location.reload();
 
     } catch (error) {
@@ -312,6 +343,48 @@ export default function StoreTable({
       return;
     }
 
+    if (field === "規定コール数") {
+
+      setEditStore({
+        ...editStore,
+        規定コール数:
+          value === ""
+            ? 0
+            : Number(value),
+      });
+
+      return;
+
+    }
+
+    if (field === "緯度") {
+
+      setEditStore({
+        ...editStore,
+        緯度:
+          value === ""
+            ? undefined
+            : Number(value),
+      });
+
+      return;
+
+    }
+
+    if (field === "経度") {
+
+      setEditStore({
+        ...editStore,
+        経度:
+          value === ""
+            ? undefined
+            : Number(value),
+      });
+
+      return;
+
+    }
+
     setEditStore({
       ...editStore,
       [field]: value,
@@ -339,9 +412,7 @@ export default function StoreTable({
 
     }
 
-    if (
-      !editStore.店舗名.trim()
-    ) {
+    if (!editStore.店舗名.trim()) {
 
       alert(
         "店舗名を入力してください。"
@@ -351,9 +422,7 @@ export default function StoreTable({
 
     }
 
-    if (
-      !editStore.店舗住所.trim()
-    ) {
+    if (!editStore.店舗住所.trim()) {
 
       alert(
         "店舗住所を入力してください。"
@@ -363,9 +432,7 @@ export default function StoreTable({
 
     }
 
-    if (
-      !editStore.担当者.trim()
-    ) {
+    if (!editStore.担当者.trim()) {
 
       alert(
         "担当者を入力してください。"
@@ -382,6 +449,7 @@ export default function StoreTable({
       await updateStore(
         editStore.firebaseId,
         {
+
           店舗名:
             editStore.店舗名.trim(),
 
@@ -389,16 +457,17 @@ export default function StoreTable({
             editStore.店舗住所.trim(),
 
           規定コール数:
-            editStore.規定コール数.trim(),
+            editStore.規定コール数,
 
           担当者:
             editStore.担当者.trim(),
 
           緯度:
-            editStore.緯度?.trim(),
+            editStore.緯度,
 
           経度:
-            editStore.経度?.trim(),
+            editStore.経度,
+
         }
       );
 
@@ -537,7 +606,6 @@ export default function StoreTable({
 
       </div>
 
-
       {/* =========================
           新規店舗追加フォーム
       ========================= */}
@@ -602,7 +670,8 @@ export default function StoreTable({
               />
 
               <input
-                type="text"
+                type="number"
+                min="0"
                 placeholder="規定コール数"
                 value={
                   newStore.規定コール数
@@ -630,7 +699,8 @@ export default function StoreTable({
               />
 
               <input
-                type="text"
+                type="number"
+                step="any"
                 placeholder="緯度（任意）"
                 value={
                   newStore.緯度 ?? ""
@@ -644,7 +714,8 @@ export default function StoreTable({
               />
 
               <input
-                type="text"
+                type="number"
+                step="any"
                 placeholder="経度（任意）"
                 value={
                   newStore.経度 ?? ""
@@ -658,7 +729,6 @@ export default function StoreTable({
               />
 
             </div>
-
 
             <div
               style={{
@@ -697,7 +767,6 @@ export default function StoreTable({
 
         )}
 
-
       {/* =========================
           管理者表示
       ========================= */}
@@ -719,7 +788,6 @@ export default function StoreTable({
         </p>
 
       )}
-
 
       {/* =========================
           店舗一覧
@@ -758,7 +826,6 @@ export default function StoreTable({
             </tr>
 
           </thead>
-
 
           <tbody>
 
@@ -804,7 +871,6 @@ export default function StoreTable({
 
                       </td>
 
-
                       <td>
 
                         <input
@@ -822,11 +888,11 @@ export default function StoreTable({
 
                       </td>
 
-
                       <td>
 
                         <input
-                          type="text"
+                          type="number"
+                          min="0"
                           value={
                             editStore.規定コール数
                           }
@@ -839,7 +905,6 @@ export default function StoreTable({
                         />
 
                       </td>
-
 
                       <td>
 
@@ -857,7 +922,6 @@ export default function StoreTable({
                         />
 
                       </td>
-
 
                       <td>
 
@@ -915,15 +979,12 @@ export default function StoreTable({
                     </td>
 
                     <td>
-                      {
-                        store.規定コール数
-                      }
+                      {store.規定コール数}
                     </td>
 
                     <td>
                       {store.担当者}
                     </td>
-
 
                     {isAdmin && (
 
@@ -941,7 +1002,6 @@ export default function StoreTable({
                         >
                           ✏️ 編集
                         </button>
-
 
                         <button
                           onClick={() =>
@@ -975,7 +1035,6 @@ export default function StoreTable({
 
         </table>
 
-
         {stores.length === 0 && (
 
           <p className="empty-message">
@@ -989,4 +1048,5 @@ export default function StoreTable({
     </div>
 
   );
+
 }
