@@ -1,6 +1,6 @@
 // =========================
 // 日本住所 → 緯度・経度
-// HeartRails Geo API
+// 国土地理院 Geocoding API
 // =========================
 
 export type GeocodingResult = {
@@ -13,7 +13,9 @@ export type GeocodingResult = {
 // 住所を正規化
 // =========================
 
-function normalizeAddress(address: string): string {
+function normalizeAddress(
+  address: string
+): string {
 
   return address
     .trim()
@@ -29,33 +31,75 @@ function normalizeAddress(address: string): string {
 
 
 // =========================
-// 住所 → 緯度経度
+// 住所を検索する候補を作る
 // =========================
 
-export async function geocodeAddress(
+function createAddressCandidates(
   address: string
-): Promise<GeocodingResult | null> {
+): string[] {
 
-  const normalizedAddress =
+  const normalized =
     normalizeAddress(address);
 
-  if (!normalizedAddress) {
-    return null;
-  }
 
-  try {
+  const candidates: string[] = [];
 
-    console.log(
-      "住所検索:",
-      normalizedAddress
+
+  // 元の住所
+  candidates.push(
+    normalized
+  );
+
+
+  // 「3-5-2」→「3-5」
+  const hyphenMatch =
+    normalized.match(
+      /^(.*?)(\d+)-(\d+)-(\d+)$/
     );
 
 
+  if (hyphenMatch) {
+
+    candidates.push(
+      `${hyphenMatch[1]}${hyphenMatch[2]}-${hyphenMatch[3]}`
+    );
+
+    candidates.push(
+      `${hyphenMatch[1]}${hyphenMatch[2]}`
+    );
+
+  }
+
+
+  // 重複削除
+  return [
+    ...new Set(
+      candidates
+    ),
+  ];
+
+}
+
+
+// =========================
+// 国土地理院API
+// =========================
+
+async function searchGsi(
+  address: string
+): Promise<GeocodingResult | null> {
+
+  try {
+
     const url =
-      "https://geoapi.heartrails.com/api/json" +
-      "?method=suggest" +
-      "&matching=like" +
-      `&keyword=${encodeURIComponent(normalizedAddress)}`;
+      "https://msearch.gsi.go.jp/address-search/AddressSearch?q=" +
+      encodeURIComponent(address);
+
+
+    console.log(
+      "国土地理院住所検索:",
+      address
+    );
 
 
     const response =
@@ -65,7 +109,7 @@ export async function geocodeAddress(
     if (!response.ok) {
 
       console.error(
-        "HeartRails APIエラー:",
+        "国土地理院APIエラー:",
         response.status
       );
 
@@ -79,66 +123,53 @@ export async function geocodeAddress(
 
 
     console.log(
-      "HeartRails検索結果:",
+      "国土地理院検索結果:",
       data
     );
 
 
-    // =========================
-    // 結果がない
-    // =========================
-
     if (
-      !data ||
-      !data.response
+      !Array.isArray(data) ||
+      data.length === 0
     ) {
-
-      console.warn(
-        "住所が見つかりません:",
-        address
-      );
 
       return null;
 
     }
 
 
-    // =========================
-    // suggestの結果取得
-    // =========================
+    const first =
+      data[0];
 
-    const results =
-      data.response;
+
+    // 国土地理院は
+    // geometry.coordinates
+    // [経度, 緯度]
+    // で返す
+
+    const coordinates =
+      first?.geometry?.coordinates;
 
 
     if (
-      !Array.isArray(results) ||
-      results.length === 0
+      !Array.isArray(coordinates) ||
+      coordinates.length < 2
     ) {
-
-      console.warn(
-        "住所検索結果が0件:",
-        address
-      );
 
       return null;
 
     }
 
-
-    // =========================
-    // 最初の候補
-    // =========================
-
-    const result =
-      results[0];
-
-
-    const latitude =
-      Number(result.y);
 
     const longitude =
-      Number(result.x);
+      Number(
+        coordinates[0]
+      );
+
+    const latitude =
+      Number(
+        coordinates[1]
+      );
 
 
     if (
@@ -146,21 +177,9 @@ export async function geocodeAddress(
       !Number.isFinite(longitude)
     ) {
 
-      console.warn(
-        "緯度経度が取得できません:",
-        result
-      );
-
       return null;
 
     }
-
-
-    console.log(
-      "緯度経度取得成功:",
-      latitude,
-      longitude
-    );
 
 
     return {
@@ -173,17 +192,66 @@ export async function geocodeAddress(
 
     };
 
-
   } catch (error) {
 
     console.error(
-      "HeartRailsジオコーディングエラー:",
+      "国土地理院ジオコーディングエラー:",
       error
     );
 
     return null;
 
   }
+
+}
+
+
+// =========================
+// 住所 → 緯度経度
+// =========================
+
+export async function geocodeAddress(
+  address: string
+): Promise<GeocodingResult | null> {
+
+  const candidates =
+    createAddressCandidates(
+      address
+    );
+
+
+  for (
+    const candidate of candidates
+  ) {
+
+    const result =
+      await searchGsi(
+        candidate
+      );
+
+
+    if (result) {
+
+      console.log(
+        "住所検索成功:",
+        candidate,
+        result
+      );
+
+      return result;
+
+    }
+
+  }
+
+
+  console.warn(
+    "住所が見つかりません:",
+    address
+  );
+
+
+  return null;
 
 }
 
@@ -225,7 +293,9 @@ export async function geocodeStores<
       typeof store.経度 === "number"
     ) {
 
-      result.push(store);
+      result.push(
+        store
+      );
 
       continue;
 
@@ -233,7 +303,7 @@ export async function geocodeStores<
 
 
     console.log(
-      `住所検索 ${i + 1}/${stores.length}:`,
+      `住所検索 ${i + 1}/${stores.length}`,
       store.店舗名,
       store.店舗住所
     );
@@ -247,7 +317,7 @@ export async function geocodeStores<
 
     if (coordinates) {
 
-      result.push({
+      const updatedStore = {
 
         ...store,
 
@@ -257,7 +327,20 @@ export async function geocodeStores<
         経度:
           coordinates.経度,
 
-      });
+      };
+
+
+      console.log(
+        "緯度経度を取得:",
+        updatedStore.店舗名,
+        updatedStore.緯度,
+        updatedStore.経度
+      );
+
+
+      result.push(
+        updatedStore
+      );
 
     } else {
 
@@ -267,13 +350,16 @@ export async function geocodeStores<
         store.店舗住所
       );
 
-      result.push(store);
+
+      result.push(
+        store
+      );
 
     }
 
 
     // =========================
-    // API連続アクセス対策
+    // APIアクセス間隔
     // =========================
 
     if (
@@ -285,7 +371,7 @@ export async function geocodeStores<
         (resolve) =>
           setTimeout(
             resolve,
-            1000
+            500
           )
       );
 
