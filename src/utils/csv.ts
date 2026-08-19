@@ -8,28 +8,42 @@ export function parseCsv(file: File): Promise<Store[]> {
       skipEmptyLines: true,
 
       complete: (result) => {
-        const stores: Store[] = (result.data as any[]).map(
-          (store) => ({
-            店舗名: String(store.店舗名 ?? ""),
-            店舗住所: String(store.店舗住所 ?? ""),
-            規定コール数: Number(store.規定コール数) || 0,
-            担当者: String(store.担当者 ?? ""),
+        try {
+          const stores: Store[] = (result.data as any[]).map(
+            (store) => {
+              const latitude =
+                store.緯度?.trim() || "";
 
-            緯度:
-              store.緯度 !== undefined &&
-              store.緯度 !== ""
-                ? Number(store.緯度)
-                : undefined,
+              const longitude =
+                store.経度?.trim() || "";
 
-            経度:
-              store.経度 !== undefined &&
-              store.経度 !== ""
-                ? Number(store.経度)
-                : undefined,
-          })
-        );
+              return {
+                店舗名:
+                  store.店舗名?.trim() || "",
 
-        resolve(stores);
+                店舗住所:
+                  store.店舗住所?.trim() || "",
+
+                規定コール数:
+                  Number(store.規定コール数) || 0,
+
+                担当者:
+                  store.担当者?.trim() || "",
+
+                緯度:
+                  latitude,
+
+                経度:
+                  longitude,
+              };
+            }
+          );
+
+          resolve(stores);
+
+        } catch (error) {
+          reject(error);
+        }
       },
 
       error: (error) => {
