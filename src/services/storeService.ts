@@ -8,69 +8,27 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
+
 import type { Store } from "../types/Store";
 
-const COLLECTION_NAME = "stores";
+
+const COLLECTION_NAME =
+  "stores";
 
 
 // =========================
-// 全件取得
+// Firebase保存用データ作成
+// undefinedを絶対にFirebaseへ送らない
 // =========================
 
-export async function getStores(): Promise<Store[]> {
-
-  const snapshot = await getDocs(
-    collection(db, COLLECTION_NAME)
-  );
-
-  return snapshot.docs.map((item) => {
-
-    const data =
-      item.data();
-
-    return {
-      店舗名:
-        String(data.店舗名 ?? ""),
-
-      店舗住所:
-        String(data.店舗住所 ?? ""),
-
-      規定コール数:
-        Number(data.規定コール数 ?? 0),
-
-      担当者:
-        String(data.担当者 ?? ""),
-
-      // Firebaseに保存されていない場合はundefined
-      緯度:
-        typeof data.緯度 === "number"
-          ? data.緯度
-          : undefined,
-
-      経度:
-        typeof data.経度 === "number"
-          ? data.経度
-          : undefined,
-
-      firebaseId:
-        item.id,
-    };
-
-  });
-
-}
-
-
-// =========================
-// 追加
-// =========================
-
-export async function addStore(
+function createFirebaseStore(
   store: Store
 ) {
 
-  // undefinedをFirebaseに渡さない
-  const data: Record<string, unknown> = {
+  const data: Record<
+    string,
+    string | number
+  > = {
 
     店舗名:
       store.店舗名,
@@ -87,9 +45,13 @@ export async function addStore(
   };
 
 
-  // 緯度がある場合だけ保存
+  // =========================
+  // 緯度
+  // =========================
+
   if (
-    typeof store.緯度 === "number"
+    typeof store.緯度 === "number" &&
+    Number.isFinite(store.緯度)
   ) {
 
     data.緯度 =
@@ -98,9 +60,13 @@ export async function addStore(
   }
 
 
-  // 経度がある場合だけ保存
+  // =========================
+  // 経度
+  // =========================
+
   if (
-    typeof store.経度 === "number"
+    typeof store.経度 === "number" &&
+    Number.isFinite(store.経度)
   ) {
 
     data.経度 =
@@ -109,8 +75,102 @@ export async function addStore(
   }
 
 
+  return data;
+
+}
+
+
+// =========================
+// 全件取得
+// =========================
+
+export async function getStores():
+  Promise<Store[]> {
+
+  const snapshot =
+    await getDocs(
+      collection(
+        db,
+        COLLECTION_NAME
+      )
+    );
+
+
+  return snapshot.docs.map(
+    (item) => {
+
+      const data =
+        item.data();
+
+
+      return {
+
+        店舗名:
+          String(
+            data.店舗名 ?? ""
+          ),
+
+        店舗住所:
+          String(
+            data.店舗住所 ?? ""
+          ),
+
+        規定コール数:
+          Number(
+            data.規定コール数 ?? 0
+          ),
+
+        担当者:
+          String(
+            data.担当者 ?? ""
+          ),
+
+        緯度:
+          typeof data.緯度 === "number"
+            ? data.緯度
+            : undefined,
+
+        経度:
+          typeof data.経度 === "number"
+            ? data.経度
+            : undefined,
+
+        firebaseId:
+          item.id,
+
+      };
+
+    }
+  );
+
+}
+
+
+// =========================
+// 追加
+// =========================
+
+export async function addStore(
+  store: Store
+) {
+
+  const data =
+    createFirebaseStore(
+      store
+    );
+
+
+  console.log(
+    "Firebaseへ保存:",
+    data
+  );
+
+
   await addDoc(
-    collection(db, COLLECTION_NAME),
+    collection(
+      db,
+      COLLECTION_NAME
+    ),
     data
   );
 
@@ -136,6 +196,7 @@ export async function deleteAllStores() {
 
     snapshot.docs.map(
       (item) =>
+
         deleteDoc(
           doc(
             db,
@@ -143,6 +204,7 @@ export async function deleteAllStores() {
             item.id
           )
         )
+
     )
 
   );
@@ -183,43 +245,10 @@ export async function updateStore(
   store: Store
 ) {
 
-  const data: Record<string, unknown> = {
-
-    店舗名:
-      store.店舗名,
-
-    店舗住所:
-      store.店舗住所,
-
-    規定コール数:
-      store.規定コール数,
-
-    担当者:
-      store.担当者,
-
-  };
-
-
-  // 緯度がある場合だけ更新
-  if (
-    typeof store.緯度 === "number"
-  ) {
-
-    data.緯度 =
-      store.緯度;
-
-  }
-
-
-  // 経度がある場合だけ更新
-  if (
-    typeof store.経度 === "number"
-  ) {
-
-    data.経度 =
-      store.経度;
-
-  }
+  const data =
+    createFirebaseStore(
+      store
+    );
 
 
   await updateDoc(
@@ -231,6 +260,7 @@ export async function updateStore(
     ),
 
     data
+
   );
 
 }
