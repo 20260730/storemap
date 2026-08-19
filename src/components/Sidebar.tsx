@@ -1,6 +1,8 @@
 import type { Store } from "../types/Store";
 import { shareConfigs } from "../data/shareConfig";
 
+type CsvImportMode = "merge" | "replace";
+
 type Props = {
   stores: Store[];
   keyword: string;
@@ -12,7 +14,10 @@ type Props = {
   selectAll: () => void;
   clearAll: () => void;
   isShareMode: boolean;
-  onCsvUpload: (file: File) => void;
+  onCsvUpload: (
+    file: File,
+    mode: CsvImportMode
+  ) => void;
   colorMode: "person" | "call";
   setColorMode: (mode: "person" | "call") => void;
 };
@@ -100,15 +105,65 @@ export default function Sidebar({
         <section className="sidebar-section">
           <h3>📂 CSVアップロード</h3>
 
+          <div
+            style={{
+              marginBottom: "10px",
+            }}
+          >
+            <label
+              className="radio-label"
+              style={{
+                display: "block",
+                marginBottom: "8px",
+              }}
+            >
+              <input
+                type="radio"
+                name="csvImportMode"
+                value="merge"
+                defaultChecked
+              />
+              追加＋更新
+            </label>
+
+            <label
+              className="radio-label"
+              style={{
+                display: "block",
+              }}
+            >
+              <input
+                type="radio"
+                name="csvImportMode"
+                value="replace"
+              />
+              全件書き換え
+            </label>
+          </div>
+
           <input
             type="file"
             accept=".csv"
             className="csv-input"
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const file =
+                e.target.files?.[0];
 
               if (file) {
-                onCsvUpload(file);
+                const selectedMode =
+                  document.querySelector(
+                    'input[name="csvImportMode"]:checked'
+                  ) as HTMLInputElement | null;
+
+                const mode =
+                  selectedMode?.value === "replace"
+                    ? "replace"
+                    : "merge";
+
+                onCsvUpload(
+                  file,
+                  mode
+                );
               }
 
               e.target.value = "";
@@ -116,7 +171,9 @@ export default function Sidebar({
           />
 
           <p className="sidebar-note">
-            CSVを選択するとFirebaseへ保存します。
+            「追加＋更新」：既存店舗は更新、新規店舗は追加します。
+            <br />
+            「全件書き換え」：現在の店舗をすべてCSVに置き換えます。
           </p>
         </section>
       )}
