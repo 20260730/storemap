@@ -3,6 +3,8 @@
 // OpenStreetMap Nominatim
 // =========================
 
+import type { Store } from "../types/Store";
+
 export type GeocodingResult = {
   lat: number;
   lon: number;
@@ -10,14 +12,14 @@ export type GeocodingResult = {
 
 
 // =========================
-// 住所から緯度・経度を取得
+// 住所から座標を取得
 // =========================
 
 export async function geocodeAddress(
   address: string
 ): Promise<GeocodingResult | null> {
 
-  if (!address.trim()) {
+  if (!address || !address.trim()) {
     return null;
   }
 
@@ -77,23 +79,14 @@ export async function geocodeAddress(
 
 
 // =========================
-// 複数店舗を順番に処理
+// CSV店舗を住所からジオコーディング
 // =========================
 
-export async function geocodeStores<
-  T extends {
-    店舗名: string;
-    店舗住所: string;
-    規定コール数: number;
-    担当者: string;
-    緯度?: number;
-    経度?: number;
-  }
->(
-  stores: T[]
-): Promise<T[]> {
+export async function geocodeStores(
+  stores: Store[]
+): Promise<Store[]> {
 
-  const result: T[] = [];
+  const result: Store[] = [];
 
   for (
     let i = 0;
@@ -111,23 +104,24 @@ export async function geocodeStores<
 
 
     // =========================
-    // すでに座標がある場合
+    // すでに緯度・経度がある場合
     // =========================
 
     if (
       store.緯度 !== undefined &&
-      store.経度 !== undefined
+      store.経度 !== undefined &&
+      !Number.isNaN(Number(store.緯度)) &&
+      !Number.isNaN(Number(store.経度))
     ) {
 
       result.push(store);
 
       continue;
-
     }
 
 
     // =========================
-    // 住所から座標取得
+    // 住所から検索
     // =========================
 
     const coordinates =
@@ -138,30 +132,34 @@ export async function geocodeStores<
 
     if (coordinates) {
 
+      console.log(
+        "座標取得成功:",
+        store.店舗名,
+        coordinates.lat,
+        coordinates.lon
+      );
+
       result.push({
-
         ...store,
-
-        緯度:
-          coordinates.lat,
-
-        経度:
-          coordinates.lon,
-
+        緯度: coordinates.lat,
+        経度: coordinates.lon,
       });
 
     } else {
 
-      // 住所が見つからなくても
-      // 店舗データ自体は残す
+      console.warn(
+        "座標取得できませんでした:",
+        store.店舗名,
+        store.店舗住所
+      );
 
+      // 店舗自体は残す
       result.push(store);
-
     }
 
 
     // =========================
-    // Nominatimへの連続アクセス防止
+    // Nominatimへの連続アクセスを防ぐ
     // =========================
 
     if (
@@ -177,10 +175,7 @@ export async function geocodeStores<
       );
 
     }
-
   }
 
-
   return result;
-
 }
