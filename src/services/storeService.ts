@@ -11,25 +11,94 @@ import { db } from "../firebase";
 
 import type { Store } from "../types/Store";
 
+import {
+  geocodeAddress,
+} from "./geocodingService";
 
-const COLLECTION_NAME =
-  "stores";
+
+const COLLECTION_NAME = "stores";
 
 
-// =========================
-// Firebase保存用データを作る
-// undefinedを除外
-// =========================
+// =====================================================
+// 緯度経度を確実に付ける
+// =====================================================
 
-function createFirestoreStore(
+async function prepareStore(
   store: Store
-) {
+): Promise<Store> {
 
-  const data: Record<
-    string,
-    unknown
-  > = {
+  // すでに緯度経度がある場合
+  if (
+    typeof store.緯度 === "number" &&
+    Number.isFinite(store.緯度) &&
+    typeof store.経度 === "number" &&
+    Number.isFinite(store.経度)
+  ) {
 
+    console.log(
+      "既存の緯度経度を使用:",
+      store.店舗名,
+      store.緯度,
+      store.経度
+    );
+
+    return store;
+  }
+
+
+  // ===================================================
+  // 住所から緯度経度を取得
+  // ===================================================
+
+  console.log(
+    "住所から緯度経度を取得:",
+    store.店舗名,
+    store.店舗住所
+  );
+
+
+  const coordinates =
+    await geocodeAddress(
+      store.店舗住所
+    );
+
+
+  if (coordinates) {
+
+    console.log(
+      "緯度経度取得成功:",
+      store.店舗名,
+      coordinates.緯度,
+      coordinates.経度
+    );
+
+
+    return {
+      ...store,
+
+      緯度:
+        coordinates.緯度,
+
+      経度:
+        coordinates.経度,
+    };
+
+  }
+
+
+  // ===================================================
+  // 取得できなかった場合
+  // ===================================================
+
+  console.warn(
+    "緯度経度を取得できませんでした:",
+    store.店舗名,
+    store.店舗住所
+  );
+
+
+  // undefinedをFirestoreへ渡さない
+  const safeStore: Store = {
     店舗名:
       store.店舗名,
 
@@ -41,43 +110,16 @@ function createFirestoreStore(
 
     担当者:
       store.担当者,
-
   };
 
 
-  // 緯度が存在する場合だけ保存
-
-  if (
-    typeof store.緯度 === "number" &&
-    Number.isFinite(store.緯度)
-  ) {
-
-    data.緯度 =
-      store.緯度;
-
-  }
-
-
-  // 経度が存在する場合だけ保存
-
-  if (
-    typeof store.経度 === "number" &&
-    Number.isFinite(store.経度)
-  ) {
-
-    data.経度 =
-      store.経度;
-
-  }
-
-
-  return data;
+  return safeStore;
 }
 
 
-// =========================
+// =====================================================
 // 全件取得
-// =========================
+// =====================================================
 
 export async function getStores(): Promise<Store[]> {
 
@@ -103,18 +145,25 @@ export async function getStores(): Promise<Store[]> {
 }
 
 
-// =========================
+// =====================================================
 // 追加
-// =========================
+// =====================================================
 
 export async function addStore(
   store: Store
 ) {
 
-  const data =
-    createFirestoreStore(
+  // ★ここで必ず緯度経度を付ける
+  const preparedStore =
+    await prepareStore(
       store
     );
+
+
+  console.log(
+    "Firebaseへ保存:",
+    preparedStore
+  );
 
 
   await addDoc(
@@ -122,14 +171,14 @@ export async function addStore(
       db,
       COLLECTION_NAME
     ),
-    data
+    preparedStore
   );
 }
 
 
-// =========================
+// =====================================================
 // 全削除
-// =========================
+// =====================================================
 
 export async function deleteAllStores() {
 
@@ -143,10 +192,8 @@ export async function deleteAllStores() {
 
 
   await Promise.all(
-
     snapshot.docs.map(
       (item) =>
-
         deleteDoc(
           doc(
             db,
@@ -155,14 +202,13 @@ export async function deleteAllStores() {
           )
         )
     )
-
   );
 }
 
 
-// =========================
+// =====================================================
 // CSV一括保存
-// =========================
+// =====================================================
 
 export async function saveStores(
   stores: Store[]
@@ -180,54 +226,55 @@ export async function saveStores(
     );
 
   }
-
 }
 
 
-// =========================
+// =====================================================
 // 1件更新
-// =========================
+// =====================================================
 
 export async function updateStore(
   storeId: string,
   store: Store
 ) {
 
-  const data =
-    createFirestoreStore(
+  // ★更新時も住所から緯度経度を補完
+  const preparedStore =
+    await prepareStore(
       store
     );
 
 
-  await updateDoc(
+  console.log(
+    "Firebase店舗更新:",
+    preparedStore
+  );
 
+
+  await updateDoc(
     doc(
       db,
       COLLECTION_NAME,
       storeId
     ),
-
-    data
-
+    preparedStore as Record<string, unknown>
   );
 }
 
 
-// =========================
+// =====================================================
 // 1件削除
-// =========================
+// =====================================================
 
 export async function deleteStore(
   storeId: string
 ) {
 
   await deleteDoc(
-
     doc(
       db,
       COLLECTION_NAME,
       storeId
     )
-
   );
 }
