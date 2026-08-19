@@ -646,53 +646,40 @@ const loadCsv =
   };
 
 
-  // =========================
-  // 共有URL表示制限
-  // =========================
+ // =========================
+// 共有URL表示制限
+// =========================
 
-  const permissionStores =
-    useMemo(() => {
+const permissionStores =
+  useMemo(() => {
 
-      if (
-        !isShareMode ||
-        !shareConfig
-      ) {
+    // 通常モード
+    if (
+      !isShareMode ||
+      !shareConfig
+    ) {
 
-        return stores;
+      return stores;
 
-      }
-
-      return stores.filter(
-        (store) => {
-
-          const personMatch =
-            store.担当者 ===
-            shareConfig.担当者;
-
-          const areaMatch =
-            shareConfig.許可エリア.length === 0 ||
-            shareConfig.許可エリア.some(
-              (area) =>
-                store.店舗住所.includes(
-                  area
-                )
-            );
-
-          return (
-            personMatch &&
-            areaMatch
-          );
-
-        }
-      );
-
-    }, [
-      stores,
-      isShareMode,
-      shareConfig,
-    ]);
+    }
 
 
+    // =========================
+    // 共有モード
+    // 担当者だけで絞り込む
+    // =========================
+
+    return stores.filter(
+      (store) =>
+        store.担当者.trim() ===
+        shareConfig.担当者.trim()
+    );
+
+  }, [
+    stores,
+    isShareMode,
+    shareConfig,
+  ]);
   // =========================
   // 店舗検索
   // =========================
