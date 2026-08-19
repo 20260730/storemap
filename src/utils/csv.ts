@@ -1,6 +1,11 @@
 import Papa from "papaparse";
 import type { Store } from "../types/Store";
 
+
+// =====================================================
+// CSV読み込み
+// =====================================================
+
 export function parseCsv(
   file: File
 ): Promise<Store[]> {
@@ -19,51 +24,51 @@ export function parseCsv(
             try {
 
               const stores: Store[] =
-                (result.data as any[])
-                  .map((store) => {
+                (result.data as Record<string, unknown>[])
+                  .map((row) => {
 
-                    const lat =
+                    const latitude =
                       String(
-                        store.緯度 ?? ""
+                        row["緯度"] ?? ""
                       ).trim();
 
-                    const lon =
+                    const longitude =
                       String(
-                        store.経度 ?? ""
+                        row["経度"] ?? ""
                       ).trim();
+
 
                     return {
 
                       店舗名:
                         String(
-                          store.店舗名 ?? ""
+                          row["店舗名"] ?? ""
                         ).trim(),
 
                       店舗住所:
                         String(
-                          store.店舗住所 ?? ""
+                          row["店舗住所"] ?? ""
                         ).trim(),
 
                       規定コール数:
                         Number(
-                          store.規定コール数 ?? 0
+                          row["規定コール数"] ?? 0
                         ),
 
                       担当者:
                         String(
-                          store.担当者 ?? ""
+                          row["担当者"] ?? ""
                         ).trim(),
 
-                      // CSVに入っていれば使用
-                      // 空欄ならundefined
+                      // CSVが空欄ならundefined
                       緯度:
-                        lat !== ""
-                          ? Number(lat)
+                        latitude !== ""
+                          ? Number(latitude)
                           : undefined,
 
                       経度:
-                        lon !== ""
-                          ? Number(lon)
+                        longitude !== ""
+                          ? Number(longitude)
                           : undefined,
 
                     };
@@ -71,14 +76,8 @@ export function parseCsv(
                   });
 
 
-              console.log(
-                "CSV解析結果:",
-                stores
-              );
+              resolve(stores);
 
-              resolve(
-                stores
-              );
 
             } catch (error) {
 
@@ -88,8 +87,13 @@ export function parseCsv(
 
           },
 
-          error: (error) =>
-            reject(error),
+
+          error: (error) => {
+
+            reject(error);
+
+          },
+
         }
       );
 

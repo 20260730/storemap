@@ -265,294 +265,385 @@ function App() {
   // CSVアップロード
   // =====================================================
 
-  const loadCsv =
-    async (file: File) => {
+const loadCsv =
+  async (file: File) => {
 
-      if (!isAdmin) {
+    // =====================================================
+    // 管理者チェック
+    // =====================================================
+
+    if (!isAdmin) {
+
+      alert(
+        "CSVアップロードは管理者のみ利用できます。"
+      );
+
+      return;
+    }
+
+
+    try {
+
+      setLoading(true);
+
+
+      // =====================================================
+      // CSV読み込み
+      // =====================================================
+
+      let csvStores =
+        await parseCsv(file);
+
+
+      console.log(
+        "CSV読み込み店舗数:",
+        csvStores.length
+      );
+
+
+      if (
+        csvStores.length === 0
+      ) {
 
         alert(
-          "CSVアップロードは管理者のみ利用できます。"
+          "CSVに店舗データがありません。"
         );
 
         return;
-
       }
 
-      try {
 
-        setLoading(true);
+      // =====================================================
+      // 住所から緯度・経度を取得
+      // =====================================================
 
-
-        // =========================
-        // CSV読み込み
-        // =========================
-
-        let csvStores =
-          await parseCsv(file);
-
-        console.log(
-          "CSV読み込み店舗数:",
-          csvStores.length
-        );
+      console.log(
+        "住所から緯度・経度を取得します..."
+      );
 
 
-        if (
-          csvStores.length === 0
-        ) {
-
-          alert(
-            "CSVに店舗データがありません。"
-          );
-
-          return;
-
-        }
-
-
-        // =========================
-        // 住所 → 緯度・経度
-        // =========================
-
-        console.log(
-          "住所から緯度・経度を取得します..."
-        );
-
-        csvStores =
-          await geocodeStores(
-            csvStores
-          );
-
-        console.log(
-          "ジオコーディング後:",
+      csvStores =
+        await geocodeStores(
           csvStores
         );
 
 
-        // =========================
-        // 座標取得確認
-        // =========================
+      // =====================================================
+      // ジオコーディング結果確認
+      // =====================================================
 
-        const geocodedCount =
-          csvStores.filter(
-            (store) =>
-              typeof store.緯度 === "number" &&
-              typeof store.経度 === "number"
-          ).length;
+      const geocodedCount =
+        csvStores.filter(
+          (store) =>
+            typeof store.緯度 === "number" &&
+            typeof store.経度 === "number" &&
+            Number.isFinite(store.緯度) &&
+            Number.isFinite(store.経度)
+        ).length;
 
-        console.log(
-          `座標取得成功: ${geocodedCount}/${csvStores.length}`
+
+      console.log(
+        "ジオコーディング結果:",
+        csvStores
+      );
+
+
+      console.log(
+        `座標取得成功: ${geocodedCount}/${csvStores.length}`
+      );
+
+
+      // =====================================================
+      // アップロード方法
+      // =====================================================
+
+      const mode =
+        window.prompt(
+          "CSVアップロード方法を選択してください。\n\n" +
+          "1：追加＋更新\n" +
+          "2：全件書き換え\n\n" +
+          "1 または 2 を入力してください。"
         );
 
 
-        // =========================
-        // アップロード方法
-        // =========================
+      if (
+        mode !== "1" &&
+        mode !== "2"
+      ) {
 
-        const mode =
-          window.prompt(
-            "CSVアップロード方法を選択してください。\n\n" +
-            "1：追加＋更新\n" +
-            "2：全件書き換え\n\n" +
-            "1 または 2 を入力してください。"
+        alert(
+          "CSVアップロードをキャンセルしました。"
+        );
+
+        return;
+      }
+
+
+      // =====================================================
+      // ① 追加＋更新
+      // =====================================================
+
+      if (mode === "1") {
+
+        const currentStores =
+          await getStores();
+
+
+        console.log(
+          "現在のFirebase店舗数:",
+          currentStores.length
+        );
+
+
+        let addCount = 0;
+        let updateCount = 0;
+
+
+        for (
+          const csvStore of csvStores
+        ) {
+
+          // ---------------------------------------------
+          // 店舗名＋住所で既存店舗を探す
+          // ---------------------------------------------
+
+          const existingStore =
+            currentStores.find(
+              (store) =>
+                store.店舗名.trim() ===
+                  csvStore.店舗名.trim() &&
+                store.店舗住所.trim() ===
+                  csvStore.店舗住所.trim()
+            );
+
+
+          // ---------------------------------------------
+          // 既存店舗 → 更新
+          // ---------------------------------------------
+
+          if (
+            existingStore &&
+            existingStore.firebaseId
+          ) {
+
+            console.log(
+              "店舗更新:",
+              csvStore.店舗名,
+              csvStore.緯度,
+              csvStore.経度
+            );
+
+
+            await updateStore(
+              existingStore.firebaseId,
+              csvStore
+            );
+
+
+            updateCount++;
+
+
+          } else {
+
+            // -------------------------------------------
+            // 新規店舗 → 追加
+            // -------------------------------------------
+
+            console.log(
+              "店舗追加:",
+              csvStore.店舗名,
+              csvStore.緯度,
+              csvStore.経度
+            );
+
+
+            await addStore(
+              csvStore
+            );
+
+
+            addCount++;
+
+          }
+
+        }
+
+
+        // =================================================
+        // Firebaseから再取得
+        // =================================================
+
+        const updatedStores =
+          await getStores();
+
+
+        console.log(
+          "保存後Firebase店舗数:",
+          updatedStores.length
+        );
+
+
+        setStores(
+          updatedStores
+        );
+
+
+        // =================================================
+        // 担当者一覧更新
+        // =================================================
+
+        const persons = [
+          ...new Set(
+            updatedStores
+              .map(
+                (store) =>
+                  store.担当者
+              )
+              .filter(Boolean)
+          ),
+        ];
+
+
+        setSelectedPersons(
+          persons
+        );
+
+
+        // =================================================
+        // 完了
+        // =================================================
+
+        alert(
+          `CSVの取り込みが完了しました！\n\n` +
+          `追加：${addCount}店舗\n` +
+          `更新：${updateCount}店舗\n` +
+          `住所から座標取得：${geocodedCount}/${csvStores.length}店舗`
+        );
+
+
+        return;
+      }
+
+
+      // =====================================================
+      // ② 全件書き換え
+      // =====================================================
+
+      if (mode === "2") {
+
+        const confirmed =
+          window.confirm(
+            `現在Firebaseに登録されている店舗をすべて削除して、CSVの内容に入れ替えます。\n\n` +
+            `現在の店舗数：${stores.length}店舗\n` +
+            `新しいCSV：${csvStores.length}店舗\n\n` +
+            `本当に全件書き換えしますか？`
           );
 
 
-        if (
-          mode !== "1" &&
-          mode !== "2"
-        ) {
+        if (!confirmed) {
 
           alert(
             "CSVアップロードをキャンセルしました。"
           );
 
           return;
+        }
+
+
+        // ---------------------------------------------
+        // 全削除
+        // ---------------------------------------------
+
+        await deleteAllStores();
+
+
+        // ---------------------------------------------
+        // 新しい店舗を保存
+        // ---------------------------------------------
+
+        for (
+          const store of csvStores
+        ) {
+
+          console.log(
+            "店舗保存:",
+            store.店舗名,
+            store.緯度,
+            store.経度
+          );
+
+
+          await addStore(
+            store
+          );
 
         }
 
 
-        // =====================================================
-        // ① 追加＋更新
-        // =====================================================
+        // ---------------------------------------------
+        // Firebaseから再取得
+        // ---------------------------------------------
 
-        if (mode === "1") {
-
-          const currentStores =
-            await getStores();
-
-          let addCount = 0;
-          let updateCount = 0;
+        const updatedStores =
+          await getStores();
 
 
-          for (
-            const csvStore of csvStores
-          ) {
-
-            const existingStore =
-              currentStores.find(
-                (store) =>
-                  store.店舗名.trim() ===
-                    csvStore.店舗名.trim() &&
-                  store.店舗住所.trim() ===
-                    csvStore.店舗住所.trim()
-              );
-
-
-            if (
-              existingStore &&
-              existingStore.firebaseId
-            ) {
-
-              await updateStore(
-                existingStore.firebaseId,
-                csvStore
-              );
-
-              updateCount++;
-
-            } else {
-
-              await addStore(
-                csvStore
-              );
-
-              addCount++;
-
-            }
-
-          }
-
-
-          // =========================
-          // Firebaseから再取得
-          // =========================
-
-          const updatedStores =
-            await getStores();
-
-          setStores(
-            updatedStores
-          );
-
-
-          const persons = [
-            ...new Set(
-              updatedStores
-                .map(
-                  (store) =>
-                    store.担当者
-                )
-                .filter(Boolean)
-            ),
-          ];
-
-          setSelectedPersons(
-            persons
-          );
-
-
-          alert(
-            `CSVの取り込みが完了しました！\n\n` +
-            `追加：${addCount}店舗\n` +
-            `更新：${updateCount}店舗\n` +
-            `座標取得：${geocodedCount}/${csvStores.length}店舗`
-          );
-
-          return;
-
-        }
-
-
-        // =====================================================
-        // ② 全件書き換え
-        // =====================================================
-
-        if (mode === "2") {
-
-          const confirmed =
-            window.confirm(
-              `現在Firebaseに登録されている店舗をすべて削除して、CSVの内容に入れ替えます。\n\n` +
-              `現在の店舗数：${stores.length}店舗\n` +
-              `新しいCSV：${csvStores.length}店舗\n\n` +
-              `本当に全件書き換えしますか？`
-            );
-
-
-          if (!confirmed) {
-
-            alert(
-              "CSVアップロードをキャンセルしました。"
-            );
-
-            return;
-
-          }
-
-
-          await deleteAllStores();
-
-
-          for (
-            const store of csvStores
-          ) {
-
-            await addStore(
-              store
-            );
-
-          }
-
-
-          const updatedStores =
-            await getStores();
-
-          setStores(
-            updatedStores
-          );
-
-
-          const persons = [
-            ...new Set(
-              updatedStores
-                .map(
-                  (store) =>
-                    store.担当者
-                )
-                .filter(Boolean)
-            ),
-          ];
-
-          setSelectedPersons(
-            persons
-          );
-
-
-          alert(
-            `全件書き換えが完了しました！\n\n` +
-            `${updatedStores.length}店舗を登録しました。\n` +
-            `座標取得：${geocodedCount}/${csvStores.length}店舗`
-          );
-
-        }
-
-      } catch (error) {
-
-        console.error(
-          "CSVアップロードエラー:",
-          error
+        setStores(
+          updatedStores
         );
+
+
+        // ---------------------------------------------
+        // 担当者一覧
+        // ---------------------------------------------
+
+        const persons = [
+          ...new Set(
+            updatedStores
+              .map(
+                (store) =>
+                  store.担当者
+              )
+              .filter(Boolean)
+          ),
+        ];
+
+
+        setSelectedPersons(
+          persons
+        );
+
 
         alert(
-          "CSVの読み込みまたはFirebaseへの保存に失敗しました。"
+          `全件書き換えが完了しました！\n\n` +
+          `${updatedStores.length}店舗を登録しました。\n` +
+          `住所から座標取得：${geocodedCount}/${csvStores.length}店舗`
         );
-
-      } finally {
-
-        setLoading(false);
 
       }
 
-    };
+
+    } catch (error) {
+
+      console.error(
+        "CSVアップロードエラー:",
+        error
+      );
+
+
+      alert(
+        "CSVの読み込みまたはFirebaseへの保存に失敗しました。\n\n" +
+        "詳しくはF12 → Consoleを確認してください。"
+      );
+
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  };
 
 
   // =========================
