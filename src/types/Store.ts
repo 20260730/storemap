@@ -5,7 +5,5 @@ export type Store = {
   担当者: string;
   緯度?: number;
   経度?: number;
-
-  // FirebaseのドキュメントID
   firebaseId?: string;
 };
