@@ -1,18 +1,6 @@
 // =========================
 // 共有URL設定
 // =========================
-//
-// Firebaseに登録されている担当者から
-// 自動的に共有URLを作成します。
-//
-// 例:
-// 伊藤 → ?share=ito
-// 山田 → ?share=yamada
-//
-// 担当者が増えても、このファイルを
-// 手動で変更する必要はありません。
-// =========================
-
 
 export type ShareConfig = {
   id: string;
@@ -22,143 +10,60 @@ export type ShareConfig = {
 
 
 // =========================
-// 担当者名 → URL用ID
+// 担当者名から共有URL設定を作成
+// =========================
+//
+// 例：
+// 伊藤 → ito
+// 山田 → yamada
+// 佐藤 → sato
+// 田中 → tanaka
+//
+// 同じ担当者なら常に同じURLになります。
 // =========================
 
-export function createShareId(
-  person: string
-): string {
+export function createShareConfig(
+  担当者: string
+): ShareConfig {
 
-  const map: Record<string, string> = {
+  const id =
+    担当者
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-");
 
-    "佐藤": "sato",
-
-    "田中": "tanaka",
-
-    "伊藤": "ito",
-
-    "山田": "yamada",
-
+  return {
+    id,
+    担当者: 担当者.trim(),
+    許可エリア: [],
   };
-
-
-  // 登録済みの名前なら英字ID
-
-  if (map[person]) {
-
-    return map[person];
-
-  }
-
-
-  // 新しい担当者の場合
-  // 日本語でもURLに使用可能
-
-  return encodeURIComponent(
-    person.trim()
-  );
-
 }
 
 
 // =========================
-// URL → 担当者名
+// 固定URL
+// =========================
+//
+// 既存の佐藤・田中のURLを
+// そのまま使えるように残します。
 // =========================
 
-export function getPersonFromShareId(
-  shareId: string
-): string | null {
+export const shareConfigs: ShareConfig[] = [
 
-  const map: Record<string, string> = {
+  {
+    id: "sato-tokyo",
+    担当者: "佐藤",
+    許可エリア: [
+      "東京都",
+    ],
+  },
 
-    "sato": "佐藤",
+  {
+    id: "tanaka-kanagawa",
+    担当者: "田中",
+    許可エリア: [
+      "神奈川県",
+    ],
+  },
 
-    "tanaka": "田中",
-
-    "ito": "伊藤",
-
-    "yamada": "山田",
-
-  };
-
-
-  // 既存の英字ID
-
-  if (map[shareId]) {
-
-    return map[shareId];
-
-  }
-
-
-  // 日本語担当者名の場合
-
-  try {
-
-    const decoded =
-      decodeURIComponent(
-        shareId
-      );
-
-    if (decoded.trim()) {
-
-      return decoded.trim();
-
-    }
-
-  } catch {
-
-    return null;
-
-  }
-
-
-  return null;
-
-}
-
-
-// =========================
-// 共有URLを作成
-// =========================
-
-export function createShareUrl(
-  person: string
-): string {
-
-  const shareId =
-    createShareId(person);
-
-  return (
-    `${window.location.origin}/?share=${shareId}`
-  );
-
-}
-
-
-// =========================
-// 担当者一覧から共有設定を作成
-// =========================
-
-export function createShareConfigs(
-  persons: string[]
-): ShareConfig[] {
-
-  return persons
-    .filter(Boolean)
-    .map((person) => ({
-
-      id:
-        createShareId(person),
-
-      担当者:
-        person,
-
-      // 空欄 = その担当者の店舗を
-      // 全エリア表示
-
-      許可エリア: [],
-
-    }));
-
-}
+];
