@@ -27,7 +27,10 @@ import { parseCsv } from "./utils/csv";
 
 import { geocodeStores } from "./services/geocodingService";
 
-import { shareConfigs } from "./data/shareConfig";
+import {
+  getPersonFromShareId,
+  createShareUrl,
+} from "./data/shareConfig";
 
 import { db } from "./firebase";
 
@@ -38,11 +41,20 @@ import { db } from "./firebase";
 
 function App() {
 
+  // =========================
+  // ログイン
+  // =========================
+
   const [user, setUser] =
     useState<User | null>(null);
 
   const [authLoading, setAuthLoading] =
     useState(true);
+
+
+  // =========================
+  // 管理者
+  // =========================
 
   const [isAdmin, setIsAdmin] =
     useState(false);
@@ -57,14 +69,15 @@ function App() {
       window.location.search
     ).get("share");
 
-  const shareConfig =
-    shareConfigs.find(
-      (config) =>
-        config.id === shareId
-    );
+  const sharePerson =
+    shareId
+      ? getPersonFromShareId(
+          shareId
+        )
+      : null;
 
   const isShareMode =
-    Boolean(shareConfig);
+    Boolean(sharePerson);
 
 
   // =========================
@@ -124,6 +137,7 @@ function App() {
 
     }
 
+
     const checkAdmin =
       async () => {
 
@@ -134,6 +148,7 @@ function App() {
             user.uid
           );
 
+
           const snapshot =
             await getDoc(
               doc(
@@ -143,7 +158,14 @@ function App() {
               )
             );
 
-          if (!snapshot.exists()) {
+
+          if (
+            !snapshot.exists()
+          ) {
+
+            console.log(
+              "usersにユーザー情報がありません"
+            );
 
             setIsAdmin(false);
 
@@ -151,17 +173,36 @@ function App() {
 
           }
 
+
           const userData =
             snapshot.data();
+
 
           console.log(
             "Firestoreのrole:",
             userData.role
           );
 
-          setIsAdmin(
+
+          if (
             userData.role === "admin"
-          );
+          ) {
+
+            console.log(
+              "管理者として認識しました"
+            );
+
+            setIsAdmin(true);
+
+          } else {
+
+            console.log(
+              "閲覧者として認識しました"
+            );
+
+            setIsAdmin(false);
+
+          }
 
         } catch (error) {
 
@@ -176,9 +217,12 @@ function App() {
 
       };
 
+
     checkAdmin();
 
-  }, [user]);
+  }, [
+    user,
+  ]);
 
 
   // =========================
@@ -187,9 +231,14 @@ function App() {
 
   useEffect(() => {
 
-    if (authLoading) {
+    if (
+      authLoading
+    ) {
+
       return;
+
     }
+
 
     const loadStores =
       async () => {
@@ -198,24 +247,41 @@ function App() {
 
           setLoading(true);
 
+
           const data =
             await getStores();
+
 
           console.log(
             "Firebaseから取得した店舗数:",
             data.length
           );
 
-          setStores(data);
+
+          setStores(
+            data
+          );
 
 
-          if (shareConfig) {
+          // =========================
+          // 共有URL
+          // =========================
+
+          if (
+            sharePerson
+          ) {
+
+            // 共有URLの場合は
+            // その担当者だけ選択
 
             setSelectedPersons([
-              shareConfig.担当者,
+              sharePerson,
             ]);
 
           } else {
+
+            // 通常モード
+            // 全担当者を選択
 
             const persons = [
               ...new Set(
@@ -227,6 +293,7 @@ function App() {
                   .filter(Boolean)
               ),
             ];
+
 
             setSelectedPersons(
               persons
@@ -241,6 +308,7 @@ function App() {
             error
           );
 
+
           alert(
             "Firebaseから店舗データを読み込めませんでした。"
           );
@@ -253,11 +321,12 @@ function App() {
 
       };
 
+
     loadStores();
 
   }, [
     authLoading,
-    shareConfig,
+    sharePerson,
   ]);
 
 
@@ -265,421 +334,465 @@ function App() {
   // CSVアップロード
   // =====================================================
 
-const loadCsv =
-  async (file: File) => {
+  const loadCsv =
+    async (
+      file: File
+    ) => {
 
-    // =====================================================
-    // 管理者チェック
-    // =====================================================
-
-    if (!isAdmin) {
-
-      alert(
-        "CSVアップロードは管理者のみ利用できます。"
-      );
-
-      return;
-    }
-
-
-    try {
-
-      setLoading(true);
-
-
-      // =====================================================
-      // CSV読み込み
-      // =====================================================
-
-      let csvStores =
-        await parseCsv(file);
-
-
-      console.log(
-        "CSV読み込み店舗数:",
-        csvStores.length
-      );
-
+      // =========================
+      // 管理者チェック
+      // =========================
 
       if (
-        csvStores.length === 0
+        !isAdmin
       ) {
 
         alert(
-          "CSVに店舗データがありません。"
+          "CSVアップロードは管理者のみ利用できます。"
         );
 
         return;
+
       }
 
 
-      // =====================================================
-      // 住所から緯度・経度を取得
-      // =====================================================
+      try {
 
-      console.log(
-        "住所から緯度・経度を取得します..."
-      );
+        setLoading(true);
 
 
-      csvStores =
-        await geocodeStores(
-          csvStores
-        );
+        // =========================
+        // CSV読み込み
+        // =========================
 
-
-      // =====================================================
-      // ジオコーディング結果確認
-      // =====================================================
-
-      const geocodedCount =
-        csvStores.filter(
-          (store) =>
-            typeof store.緯度 === "number" &&
-            typeof store.経度 === "number" &&
-            Number.isFinite(store.緯度) &&
-            Number.isFinite(store.経度)
-        ).length;
-
-
-      console.log(
-        "ジオコーディング結果:",
-        csvStores
-      );
-
-
-      console.log(
-        `座標取得成功: ${geocodedCount}/${csvStores.length}`
-      );
-
-
-      // =====================================================
-      // アップロード方法
-      // =====================================================
-
-      const mode =
-        window.prompt(
-          "CSVアップロード方法を選択してください。\n\n" +
-          "1：追加＋更新\n" +
-          "2：全件書き換え\n\n" +
-          "1 または 2 を入力してください。"
-        );
-
-
-      if (
-        mode !== "1" &&
-        mode !== "2"
-      ) {
-
-        alert(
-          "CSVアップロードをキャンセルしました。"
-        );
-
-        return;
-      }
-
-
-      // =====================================================
-      // ① 追加＋更新
-      // =====================================================
-
-      if (mode === "1") {
-
-        const currentStores =
-          await getStores();
+        let csvStores =
+          await parseCsv(
+            file
+          );
 
 
         console.log(
-          "現在のFirebase店舗数:",
-          currentStores.length
+          "CSV読み込み店舗数:",
+          csvStores.length
         );
 
 
-        let addCount = 0;
-        let updateCount = 0;
+        // =========================
+        // 空CSVチェック
+        // =========================
 
-
-        for (
-          const csvStore of csvStores
+        if (
+          csvStores.length === 0
         ) {
 
-          // ---------------------------------------------
-          // 店舗名＋住所で既存店舗を探す
-          // ---------------------------------------------
+          alert(
+            "CSVに店舗データがありません。"
+          );
 
-          const existingStore =
-            currentStores.find(
-              (store) =>
-                store.店舗名.trim() ===
-                  csvStore.店舗名.trim() &&
-                store.店舗住所.trim() ===
-                  csvStore.店舗住所.trim()
-            );
-
-
-          // ---------------------------------------------
-          // 既存店舗 → 更新
-          // ---------------------------------------------
-
-          if (
-            existingStore &&
-            existingStore.firebaseId
-          ) {
-
-            console.log(
-              "店舗更新:",
-              csvStore.店舗名,
-              csvStore.緯度,
-              csvStore.経度
-            );
-
-
-            await updateStore(
-              existingStore.firebaseId,
-              csvStore
-            );
-
-
-            updateCount++;
-
-
-          } else {
-
-            // -------------------------------------------
-            // 新規店舗 → 追加
-            // -------------------------------------------
-
-            console.log(
-              "店舗追加:",
-              csvStore.店舗名,
-              csvStore.緯度,
-              csvStore.経度
-            );
-
-
-            await addStore(
-              csvStore
-            );
-
-
-            addCount++;
-
-          }
+          return;
 
         }
 
 
-        // =================================================
-        // Firebaseから再取得
-        // =================================================
-
-        const updatedStores =
-          await getStores();
-
+        // =========================
+        // 住所から緯度経度取得
+        // =========================
 
         console.log(
-          "保存後Firebase店舗数:",
-          updatedStores.length
+          "住所から緯度・経度を取得します..."
         );
 
 
-        setStores(
-          updatedStores
-        );
-
-
-        // =================================================
-        // 担当者一覧更新
-        // =================================================
-
-        const persons = [
-          ...new Set(
-            updatedStores
-              .map(
-                (store) =>
-                  store.担当者
-              )
-              .filter(Boolean)
-          ),
-        ];
-
-
-        setSelectedPersons(
-          persons
-        );
-
-
-        // =================================================
-        // 完了
-        // =================================================
-
-        alert(
-          `CSVの取り込みが完了しました！\n\n` +
-          `追加：${addCount}店舗\n` +
-          `更新：${updateCount}店舗\n` +
-          `住所から座標取得：${geocodedCount}/${csvStores.length}店舗`
-        );
-
-
-        return;
-      }
-
-
-      // =====================================================
-      // ② 全件書き換え
-      // =====================================================
-
-      if (mode === "2") {
-
-        const confirmed =
-          window.confirm(
-            `現在Firebaseに登録されている店舗をすべて削除して、CSVの内容に入れ替えます。\n\n` +
-            `現在の店舗数：${stores.length}店舗\n` +
-            `新しいCSV：${csvStores.length}店舗\n\n` +
-            `本当に全件書き換えしますか？`
+        csvStores =
+          await geocodeStores(
+            csvStores
           );
 
 
-        if (!confirmed) {
+        console.log(
+          "ジオコーディング結果:",
+          csvStores
+        );
+
+
+        // =========================
+        // 座標取得数
+        // =========================
+
+        const geocodedCount =
+          csvStores.filter(
+            (store) =>
+              typeof store.緯度 ===
+                "number" &&
+              typeof store.経度 ===
+                "number"
+          ).length;
+
+
+        console.log(
+          `座標取得成功: ${geocodedCount}/${csvStores.length}`
+        );
+
+
+        // =========================
+        // アップロード方法
+        // =========================
+
+        const mode =
+          window.prompt(
+            "CSVアップロード方法を選択してください。\n\n" +
+            "1：追加＋更新\n" +
+            "2：全件書き換え\n\n" +
+            "1 または 2 を入力してください。"
+          );
+
+
+        // =========================
+        // キャンセル
+        // =========================
+
+        if (
+          mode !== "1" &&
+          mode !== "2"
+        ) {
 
           alert(
             "CSVアップロードをキャンセルしました。"
           );
 
           return;
+
         }
 
 
-        // ---------------------------------------------
-        // 全削除
-        // ---------------------------------------------
+        // =====================================================
+        // ① 追加＋更新
+        // =====================================================
 
-        await deleteAllStores();
-
-
-        // ---------------------------------------------
-        // 新しい店舗を保存
-        // ---------------------------------------------
-
-        for (
-          const store of csvStores
+        if (
+          mode === "1"
         ) {
 
+          const currentStores =
+            await getStores();
+
+
           console.log(
-            "店舗保存:",
-            store.店舗名,
-            store.緯度,
-            store.経度
+            "現在のFirebase店舗数:",
+            currentStores.length
           );
 
 
-          await addStore(
-            store
+          let addCount = 0;
+
+          let updateCount = 0;
+
+
+          // =========================
+          // CSVを1件ずつ処理
+          // =========================
+
+          for (
+            const csvStore of csvStores
+          ) {
+
+            // =========================
+            // 店舗名＋住所で検索
+            // =========================
+
+            const existingStore =
+              currentStores.find(
+                (store) =>
+                  store.店舗名.trim() ===
+                    csvStore.店舗名.trim() &&
+                  store.店舗住所.trim() ===
+                    csvStore.店舗住所.trim()
+              );
+
+
+            // =========================
+            // 既存店舗
+            // =========================
+
+            if (
+              existingStore &&
+              existingStore.firebaseId
+            ) {
+
+              console.log(
+                "店舗更新:",
+                csvStore.店舗名
+              );
+
+
+              await updateStore(
+                existingStore.firebaseId,
+                csvStore
+              );
+
+
+              updateCount++;
+
+            }
+
+
+            // =========================
+            // 新規店舗
+            // =========================
+
+            else {
+
+              console.log(
+                "店舗追加:",
+                csvStore.店舗名,
+                csvStore.緯度,
+                csvStore.経度
+              );
+
+
+              await addStore(
+                csvStore
+              );
+
+
+              addCount++;
+
+            }
+
+          }
+
+
+          // =========================
+          // Firebaseから再取得
+          // =========================
+
+          const updatedStores =
+            await getStores();
+
+
+          console.log(
+            "保存後Firebase店舗数:",
+            updatedStores.length
           );
+
+
+          setStores(
+            updatedStores
+          );
+
+
+          // =========================
+          // 担当者一覧
+          // =========================
+
+          const persons = [
+            ...new Set(
+              updatedStores
+                .map(
+                  (store) =>
+                    store.担当者
+                )
+                .filter(Boolean)
+            ),
+          ];
+
+
+          setSelectedPersons(
+            persons
+          );
+
+
+          // =========================
+          // 完了
+          // =========================
+
+          alert(
+            `CSVの取り込みが完了しました！\n\n` +
+            `追加：${addCount}店舗\n` +
+            `更新：${updateCount}店舗\n` +
+            `座標取得：${geocodedCount}/${csvStores.length}店舗`
+          );
+
+
+          return;
 
         }
 
 
-        // ---------------------------------------------
-        // Firebaseから再取得
-        // ---------------------------------------------
+        // =====================================================
+        // ② 全件書き換え
+        // =====================================================
 
-        const updatedStores =
-          await getStores();
+        if (
+          mode === "2"
+        ) {
+
+          const confirmed =
+            window.confirm(
+              `現在Firebaseに登録されている店舗をすべて削除して、CSVの内容に入れ替えます。\n\n` +
+              `現在の店舗数：${stores.length}店舗\n` +
+              `新しいCSV：${csvStores.length}店舗\n\n` +
+              `本当に全件書き換えしますか？`
+            );
 
 
-        setStores(
-          updatedStores
-        );
+          if (
+            !confirmed
+          ) {
+
+            alert(
+              "CSVアップロードをキャンセルしました。"
+            );
+
+            return;
+
+          }
 
 
-        // ---------------------------------------------
-        // 担当者一覧
-        // ---------------------------------------------
+          // =========================
+          // 既存店舗削除
+          // =========================
 
-        const persons = [
-          ...new Set(
+          await deleteAllStores();
+
+
+          // =========================
+          // CSV保存
+          // =========================
+
+          for (
+            const store of csvStores
+          ) {
+
+            console.log(
+              "Firebaseへ保存:",
+              store
+            );
+
+
+            await addStore(
+              store
+            );
+
+          }
+
+
+          // =========================
+          // Firebase再取得
+          // =========================
+
+          const updatedStores =
+            await getStores();
+
+
+          console.log(
+            "保存後Firebase店舗数:",
+            updatedStores.length
+          );
+
+
+          setStores(
             updatedStores
-              .map(
-                (store) =>
-                  store.担当者
-              )
-              .filter(Boolean)
-          ),
-        ];
+          );
 
 
-        setSelectedPersons(
-          persons
+          // =========================
+          // 担当者一覧
+          // =========================
+
+          const persons = [
+            ...new Set(
+              updatedStores
+                .map(
+                  (store) =>
+                    store.担当者
+                )
+                .filter(Boolean)
+            ),
+          ];
+
+
+          setSelectedPersons(
+            persons
+          );
+
+
+          // =========================
+          // 完了
+          // =========================
+
+          alert(
+            `全件書き換えが完了しました！\n\n` +
+            `${updatedStores.length}店舗を登録しました。\n` +
+            `座標取得：${geocodedCount}/${csvStores.length}店舗`
+          );
+
+        }
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          "CSVアップロードエラー:",
+          error
         );
 
 
         alert(
-          `全件書き換えが完了しました！\n\n` +
-          `${updatedStores.length}店舗を登録しました。\n` +
-          `住所から座標取得：${geocodedCount}/${csvStores.length}店舗`
+          "CSVの読み込みまたはFirebaseへの保存に失敗しました。"
         );
+
+      } finally {
+
+        setLoading(false);
+
+      }
+
+    };
+
+
+  // =========================
+  // 共有URL表示制限
+  // =========================
+
+  const permissionStores =
+    useMemo(() => {
+
+      // =========================
+      // 通常モード
+      // =========================
+
+      if (
+        !isShareMode ||
+        !sharePerson
+      ) {
+
+        return stores;
 
       }
 
 
-    } catch (error) {
+      // =========================
+      // 共有モード
+      // =========================
+      //
+      // URLの担当者だけ表示
+      //
 
-      console.error(
-        "CSVアップロードエラー:",
-        error
+      return stores.filter(
+        (store) =>
+          store.担当者 ===
+          sharePerson
       );
 
-
-      alert(
-        "CSVの読み込みまたはFirebaseへの保存に失敗しました。\n\n" +
-        "詳しくはF12 → Consoleを確認してください。"
-      );
-
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  };
+    }, [
+      stores,
+      isShareMode,
+      sharePerson,
+    ]);
 
 
- // =========================
-// 共有URL表示制限
-// =========================
-
-const permissionStores =
-  useMemo(() => {
-
-    // 通常モード
-    if (
-      !isShareMode ||
-      !shareConfig
-    ) {
-
-      return stores;
-
-    }
-
-
-    // =========================
-    // 共有モード
-    // 担当者だけで絞り込む
-    // =========================
-
-    return stores.filter(
-      (store) =>
-        store.担当者.trim() ===
-        shareConfig.担当者.trim()
-    );
-
-  }, [
-    stores,
-    isShareMode,
-    shareConfig,
-  ]);
   // =========================
   // 店舗検索
   // =========================
@@ -690,16 +803,24 @@ const permissionStores =
       const search =
         keyword.trim();
 
-      if (!search) {
+
+      if (
+        !search
+      ) {
 
         return permissionStores;
 
       }
 
+
       return permissionStores.filter(
         (store) =>
-          store.店舗名.includes(search) ||
-          store.店舗住所.includes(search)
+          store.店舗名.includes(
+            search
+          ) ||
+          store.店舗住所.includes(
+            search
+          )
       );
 
     }, [
@@ -709,7 +830,7 @@ const permissionStores =
 
 
   // =========================
-  // 担当者
+  // 担当者一覧
   // =========================
 
   const persons =
@@ -731,14 +852,48 @@ const permissionStores =
     ]);
 
 
+  // =========================
+  // 自動共有URL
+  // =========================
+
+  const shareUrls =
+    useMemo(() => {
+
+      return persons.map(
+        (person) => ({
+
+          person,
+
+          url:
+            createShareUrl(
+              person
+            ),
+
+        })
+      );
+
+    }, [
+      persons,
+    ]);
+
+
+  // =========================
+  // 担当者選択
+  // =========================
+
   const togglePerson =
-    (person: string) => {
+    (
+      person: string
+    ) => {
 
       setSelectedPersons(
         (current) => {
 
+          // すでに選択中
           if (
-            current.includes(person)
+            current.includes(
+              person
+            )
           ) {
 
             return current.filter(
@@ -747,6 +902,9 @@ const permissionStores =
             );
 
           }
+
+
+          // 選択追加
 
           return [
             ...current,
@@ -759,20 +917,32 @@ const permissionStores =
     };
 
 
-  const selectAll = () => {
+  // =========================
+  // 全選択
+  // =========================
 
-    setSelectedPersons(
-      persons
-    );
+  const selectAll =
+    () => {
 
-  };
+      setSelectedPersons(
+        persons
+      );
+
+    };
 
 
-  const clearAll = () => {
+  // =========================
+  // 全解除
+  // =========================
 
-    setSelectedPersons([]);
+  const clearAll =
+    () => {
 
-  };
+      setSelectedPersons(
+        []
+      );
+
+    };
 
 
   // =========================
@@ -822,9 +992,12 @@ const permissionStores =
   // 認証読み込み中
   // =========================
 
-  if (authLoading) {
+  if (
+    authLoading
+  ) {
 
     return (
+
       <div className="login-page">
 
         <div className="login-box">
@@ -844,6 +1017,7 @@ const permissionStores =
         </div>
 
       </div>
+
     );
 
   }
@@ -859,9 +1033,11 @@ const permissionStores =
   ) {
 
     return (
+
       <Login
         onLogin={() => {}}
       />
+
     );
 
   }
@@ -875,11 +1051,17 @@ const permissionStores =
 
     <div className="app">
 
+
+      {/* =========================
+          ヘッダー
+      ========================= */}
+
       <header className="header">
 
         <div className="header-title">
           🗺️ StoreMap
         </div>
+
 
         <div className="header-info">
 
@@ -888,14 +1070,19 @@ const permissionStores =
             : `${finalStores.length}店舗表示`
           }
 
+
           {!isShareMode &&
             user && (
+
               <button
                 className="logout-button"
-                onClick={handleLogout}
+                onClick={
+                  handleLogout
+                }
               >
                 🚪 ログアウト
               </button>
+
             )}
 
         </div>
@@ -903,8 +1090,94 @@ const permissionStores =
       </header>
 
 
+      {/* =========================
+          共有URL一覧
+      ========================= */}
+
+      {!isShareMode &&
+        shareUrls.length > 0 && (
+
+          <div className="share-url-panel">
+
+            <div className="share-url-title">
+              🔗 担当者別の共有URL
+            </div>
+
+
+            <div className="share-url-list">
+
+              {shareUrls.map(
+                ({
+                  person,
+                  url,
+                }) => (
+
+                  <div
+                    key={person}
+                    className="share-url-item"
+                  >
+
+                    <span>
+                      {person}
+                    </span>
+
+
+                    <input
+                      type="text"
+                      value={url}
+                      readOnly
+                      onClick={(event) =>
+                        event.currentTarget.select()
+                      }
+                    />
+
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+
+                        try {
+
+                          await navigator.clipboard.writeText(
+                            url
+                          );
+
+
+                          alert(
+                            `${person}さんの共有URLをコピーしました！`
+                          );
+
+                        } catch {
+
+                          alert(
+                            "URLのコピーに失敗しました。"
+                          );
+
+                        }
+
+                      }}
+                    >
+                      コピー
+                    </button>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
+          </div>
+
+        )}
+
+
+      {/* =========================
+          共有モード
+      ========================= */}
+
       {isShareMode &&
-        shareConfig && (
+        sharePerson && (
 
           <div className="share-banner">
 
@@ -914,7 +1187,7 @@ const permissionStores =
 
             <span>
               表示担当者：
-              {shareConfig.担当者}
+              {sharePerson}
             </span>
 
           </div>
@@ -922,7 +1195,16 @@ const permissionStores =
         )}
 
 
+      {/* =========================
+          メイン
+      ========================= */}
+
       <main className="main">
+
+
+        {/* =========================
+            サイドバー
+        ========================= */}
 
         <Sidebar
 
@@ -981,21 +1263,32 @@ const permissionStores =
         />
 
 
+        {/* =========================
+            地図
+        ========================= */}
+
         <section className="map-area">
 
           <MapView
+
             stores={
               finalStores
             }
+
             colorMode={
               colorMode
             }
+
           />
 
         </section>
 
       </main>
 
+
+      {/* =========================
+          店舗一覧
+      ========================= */}
 
       <section className="table-area">
 
