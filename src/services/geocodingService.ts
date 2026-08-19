@@ -1,49 +1,55 @@
+// =========================
+// 日本住所 → 緯度・経度
+// Geolonia Community Geocoder
+// =========================
+
 import type { Store } from "../types/Store";
 
 
-// =====================================================
-// Nominatim検索
-// =====================================================
+// =========================
+// 型
+// =========================
 
-async function searchNominatim(
+type GeocodingResult = {
+  lat: number;
+  lon: number;
+};
+
+
+// =========================
+// 住所 → 緯度・経度
+// =========================
+
+export async function geocodeAddress(
   address: string
-): Promise<{
-  緯度: number;
-  経度: number;
-} | null> {
+): Promise<GeocodingResult | null> {
 
-  if (!address.trim()) {
+  if (!address || !address.trim()) {
     return null;
   }
 
   try {
 
-    const url =
-      "https://nominatim.openstreetmap.org/search" +
-      `?format=jsonv2` +
-      `&q=${encodeURIComponent(address + ", Japan")}` +
-      `&countrycodes=jp` +
-      `&limit=1`;
-
-
     console.log(
-      "Nominatim検索:",
+      "日本住所検索:",
       address
     );
 
 
+    // Geolonia Community Geocoder
+    const url =
+      "https://community-geocoder.geolonia.com/" +
+      `?address=${encodeURIComponent(address)}`;
+
+
     const response =
-      await fetch(url, {
-        headers: {
-          "Accept-Language": "ja",
-        },
-      });
+      await fetch(url);
 
 
     if (!response.ok) {
 
       console.error(
-        "Nominatimエラー:",
+        "Geolonia住所検索エラー:",
         response.status
       );
 
@@ -55,203 +61,87 @@ async function searchNominatim(
       await response.json();
 
 
+    console.log(
+      "Geolonia検索結果:",
+      data
+    );
+
+
+    // =========================
+    // 緯度経度確認
+    // =========================
+
     if (
-      !Array.isArray(data) ||
-      data.length === 0
+      typeof data?.lat === "number" &&
+      typeof data?.lng === "number"
     ) {
 
-      return null;
+      return {
+        lat: data.lat,
+        lon: data.lng,
+      };
+
     }
 
 
-    const lat =
-      Number(data[0].lat);
-
-    const lon =
-      Number(data[0].lon);
-
+    // =========================
+    // 文字列で返ってきた場合
+    // =========================
 
     if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lon)
+      data?.lat &&
+      data?.lng
     ) {
 
-      return null;
+      const lat =
+        Number(data.lat);
+
+      const lon =
+        Number(data.lng);
+
+
+      if (
+        !Number.isNaN(lat) &&
+        !Number.isNaN(lon)
+      ) {
+
+        return {
+          lat,
+          lon,
+        };
+
+      }
+
     }
 
 
-    return {
-      緯度: lat,
-      経度: lon,
-    };
+    console.warn(
+      "緯度経度を取得できませんでした:",
+      address,
+      data
+    );
+
+
+    return null;
 
 
   } catch (error) {
 
     console.error(
-      "Nominatim検索エラー:",
+      "Geoloniaジオコーディングエラー:",
       error
     );
 
     return null;
+
   }
+
 }
 
 
-// =====================================================
-// 住所 → 緯度経度
-// =====================================================
-
-export async function geocodeAddress(
-  address: string
-): Promise<{
-  緯度: number;
-  経度: number;
-} | null> {
-
-  const cleanAddress =
-    address
-      .trim()
-      .replace(/[－ー−]/g, "-")
-      .replace(/\s+/g, " ");
-
-
-  if (!cleanAddress) {
-    return null;
-  }
-
-
-  // ===================================================
-  // ① 完全な住所で検索
-  // ===================================================
-
-  let result =
-    await searchNominatim(
-      cleanAddress
-    );
-
-
-  if (result) {
-
-    console.log(
-      "① 完全住所で取得成功:",
-      cleanAddress,
-      result
-    );
-
-    return result;
-  }
-
-
-  // ===================================================
-  // ② 番地を削って検索
-  //
-  // 東京都港区赤坂3-5-2
-  // ↓
-  // 東京都港区赤坂
-  // ===================================================
-
-  const areaAddress =
-    cleanAddress.replace(
-      /\d+(-\d+)+$/,
-      ""
-    ).trim();
-
-
-  if (
-    areaAddress &&
-    areaAddress !== cleanAddress
-  ) {
-
-    console.log(
-      "② 番地を削って再検索:",
-      areaAddress
-    );
-
-
-    result =
-      await searchNominatim(
-        areaAddress
-      );
-
-
-    if (result) {
-
-      console.log(
-        "② エリア住所で取得成功:",
-        areaAddress,
-        result
-      );
-
-      return result;
-    }
-
-  }
-
-
-  // ===================================================
-  // ③ 丁目まで削って検索
-  //
-  // 東京都港区赤坂3
-  // ↓
-  // 東京都港区赤坂
-  // ===================================================
-
-  const townAddress =
-    areaAddress.replace(
-      /\d+$/,
-      ""
-    ).trim();
-
-
-  if (
-    townAddress &&
-    townAddress !== areaAddress
-  ) {
-
-    console.log(
-      "③ 丁目を削って再検索:",
-      townAddress
-    );
-
-
-    result =
-      await searchNominatim(
-        townAddress
-      );
-
-
-    if (result) {
-
-      console.log(
-        "③ 町名で取得成功:",
-        townAddress,
-        result
-      );
-
-      return result;
-    }
-
-  }
-
-
-  // ===================================================
-  // ④ それでもダメ
-  // ===================================================
-
-  console.warn(
-    "住所が見つかりません:",
-    cleanAddress
-  );
-
-
-  return null;
-}
-
-
-// =====================================================
-// 複数店舗
-// =====================================================
+// =========================
+// 複数店舗を順番に処理
+// =========================
 
 export async function geocodeStores(
   stores: Store[]
@@ -270,19 +160,30 @@ export async function geocodeStores(
       stores[i];
 
 
-    // 既に座標がある場合
+    // =========================
+    // すでに緯度経度がある場合
+    // =========================
+
     if (
       typeof store.緯度 === "number" &&
-      typeof store.経度 === "number" &&
-      Number.isFinite(store.緯度) &&
-      Number.isFinite(store.経度)
+      typeof store.経度 === "number"
     ) {
+
+      console.log(
+        "既存の座標を使用:",
+        store.店舗名
+      );
 
       result.push(store);
 
       continue;
+
     }
 
+
+    // =========================
+    // 住所から座標取得
+    // =========================
 
     console.log(
       `住所検索 ${i + 1}/${stores.length}:`,
@@ -297,28 +198,61 @@ export async function geocodeStores(
       );
 
 
+    // =========================
+    // 成功
+    // =========================
+
     if (coordinates) {
 
-      result.push({
+      const updatedStore: Store = {
 
         ...store,
 
         緯度:
-          coordinates.緯度,
+          coordinates.lat,
 
         経度:
-          coordinates.経度,
+          coordinates.lon,
 
-      });
+      };
 
-    } else {
 
+      console.log(
+        "緯度経度取得成功:",
+        store.店舗名,
+        coordinates
+      );
+
+
+      result.push(
+        updatedStore
+      );
+
+    }
+
+    // =========================
+    // 失敗
+    // =========================
+
+    else {
+
+      console.warn(
+        "緯度経度を取得できませんでした:",
+        store.店舗名,
+        store.店舗住所
+      );
+
+
+      // 店舗自体は残す
       result.push(store);
 
     }
 
 
-    // Nominatimへのアクセス間隔
+    // =========================
+    // API連続アクセス対策
+    // =========================
+
     if (
       i < stores.length - 1
     ) {
@@ -327,7 +261,7 @@ export async function geocodeStores(
         (resolve) =>
           setTimeout(
             resolve,
-            1100
+            500
           )
       );
 
@@ -337,4 +271,5 @@ export async function geocodeStores(
 
 
   return result;
+
 }
