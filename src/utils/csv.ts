@@ -5,113 +5,94 @@ export function parseCsv(
   file: File
 ): Promise<Store[]> {
 
-  return new Promise((resolve, reject) => {
+  return new Promise(
+    (resolve, reject) => {
 
-    Papa.parse(file, {
+      Papa.parse(
+        file,
+        {
+          header: true,
+          skipEmptyLines: true,
 
-      header: true,
+          complete: (result) => {
 
-      skipEmptyLines: true,
+            try {
 
-      encoding: "UTF-8",
+              const stores: Store[] =
+                (result.data as any[])
+                  .map((store) => {
 
-      complete: (result) => {
+                    const lat =
+                      String(
+                        store.緯度 ?? ""
+                      ).trim();
 
-        console.log(
-          "CSV生データ:",
-          result.data
-        );
+                    const lon =
+                      String(
+                        store.経度 ?? ""
+                      ).trim();
 
-        const stores: Store[] =
-          (result.data as Record<string, unknown>[])
-            .map((row) => {
+                    return {
 
-              const 店舗名 =
-                String(
-                  row["店舗名"] ?? ""
-                ).trim();
+                      店舗名:
+                        String(
+                          store.店舗名 ?? ""
+                        ).trim(),
 
-              const 店舗住所 =
-                String(
-                  row["店舗住所"] ?? ""
-                ).trim();
+                      店舗住所:
+                        String(
+                          store.店舗住所 ?? ""
+                        ).trim(),
 
-              const 規定コール数 =
-                Number(
-                  row["規定コール数"] ?? 0
-                );
+                      規定コール数:
+                        Number(
+                          store.規定コール数 ?? 0
+                        ),
 
-              const 担当者 =
-                String(
-                  row["担当者"] ?? ""
-                ).trim();
+                      担当者:
+                        String(
+                          store.担当者 ?? ""
+                        ).trim(),
 
-              const 緯度Value =
-                row["緯度"];
+                      // CSVに入っていれば使用
+                      // 空欄ならundefined
+                      緯度:
+                        lat !== ""
+                          ? Number(lat)
+                          : undefined,
 
-              const 経度Value =
-                row["経度"];
+                      経度:
+                        lon !== ""
+                          ? Number(lon)
+                          : undefined,
 
-              const 緯度 =
-                緯度Value !== undefined &&
-                緯度Value !== null &&
-                String(緯度Value).trim() !== ""
-                  ? Number(緯度Value)
-                  : undefined;
+                    };
 
-              const 経度 =
-                経度Value !== undefined &&
-                経度Value !== null &&
-                String(経度Value).trim() !== ""
-                  ? Number(経度Value)
-                  : undefined;
-
-
-              return {
-                店舗名,
-                店舗住所,
-                規定コール数,
-                担当者,
-                緯度,
-                経度,
-              };
-
-            })
-            .filter(
-              (store) =>
-                store.店舗名 !== "" ||
-                store.店舗住所 !== ""
-            );
+                  });
 
 
-        console.log(
-          "CSV変換後:",
-          stores
-        );
+              console.log(
+                "CSV解析結果:",
+                stores
+              );
 
-        console.log(
-          "CSV店舗数:",
-          stores.length
-        );
+              resolve(
+                stores
+              );
 
+            } catch (error) {
 
-        resolve(stores);
+              reject(error);
 
-      },
+            }
 
-      error: (error) => {
+          },
 
-        console.error(
-          "CSV読み込みエラー:",
-          error
-        );
+          error: (error) =>
+            reject(error),
+        }
+      );
 
-        reject(error);
-
-      },
-
-    });
-
-  });
-
+    }
+  );
 }
