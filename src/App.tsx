@@ -25,6 +25,8 @@ import {
 
 import { parseCsv } from "./utils/csv";
 
+import { geocodeStores } from "./services/geocodingService";
+
 import { shareConfigs } from "./data/shareConfig";
 
 import { db } from "./firebase";
@@ -325,12 +327,12 @@ function App() {
         // CSV読み込み
         // =========================
 
-        const data =
+        const csvData =
           await parseCsv(file);
 
         console.log(
           "CSV読み込み店舗数:",
-          data.length
+          csvData.length
         );
 
 
@@ -338,7 +340,7 @@ function App() {
         // 空CSVチェック
         // =========================
 
-        if (data.length === 0) {
+        if (csvData.length === 0) {
 
           alert(
             "CSVに店舗データがありません。"
@@ -347,6 +349,25 @@ function App() {
           return;
 
         }
+
+
+        // =========================
+        // 住所から緯度・経度を取得
+        // =========================
+
+        alert(
+          "CSVを読み込みました。\n\n住所から地図の位置を取得しています。\n店舗数が多い場合は少し時間がかかります。"
+        );
+
+        const data =
+          await geocodeStores(
+            csvData
+          );
+
+        console.log(
+          "位置情報取得完了:",
+          data
+        );
 
 
         // =========================
@@ -493,7 +514,7 @@ function App() {
             `CSVの取り込みが完了しました！\n\n` +
             `追加：${addCount}店舗\n` +
             `更新：${updateCount}店舗\n` +
-            `既存店舗：${currentStores.length}店舗`
+            `取り込み後の総店舗数：${updatedStores.length}店舗`
           );
 
           return;
@@ -550,11 +571,15 @@ function App() {
 
 
           // =========================
-          // 画面更新
+          // Firebaseから再取得
           // =========================
 
+          const updatedStores =
+            await getStores();
+
+
           setStores(
-            data
+            updatedStores
           );
 
 
@@ -564,7 +589,7 @@ function App() {
 
           const persons = [
             ...new Set(
-              data
+              updatedStores
                 .map(
                   (store) =>
                     store.担当者
@@ -584,7 +609,7 @@ function App() {
 
           alert(
             `全件書き換えが完了しました！\n\n` +
-            `${data.length}店舗を登録しました。`
+            `${updatedStores.length}店舗を登録しました。`
           );
 
         }
@@ -869,7 +894,10 @@ function App() {
 
     <div className="app">
 
-      {/* ヘッダー */}
+
+      {/* =========================
+          ヘッダー
+      ========================= */}
 
       <header className="header">
 
@@ -877,12 +905,14 @@ function App() {
           🗺️ StoreMap
         </div>
 
+
         <div className="header-info">
 
           {loading
             ? "💾 読み込み中..."
             : `${finalStores.length}店舗表示`
           }
+
 
           {!isShareMode &&
             user && (
@@ -901,7 +931,9 @@ function App() {
       </header>
 
 
-      {/* 共有モード */}
+      {/* =========================
+          共有モード
+      ========================= */}
 
       {isShareMode &&
         shareConfig && (
@@ -922,11 +954,16 @@ function App() {
         )}
 
 
-      {/* メイン */}
+      {/* =========================
+          メイン
+      ========================= */}
 
       <main className="main">
 
-        {/* サイドバー */}
+
+        {/* =========================
+            サイドバー
+        ========================= */}
 
         <Sidebar
 
@@ -985,7 +1022,9 @@ function App() {
         />
 
 
-        {/* 地図 */}
+        {/* =========================
+            地図
+        ========================= */}
 
         <section className="map-area">
 
@@ -1006,7 +1045,9 @@ function App() {
       </main>
 
 
-      {/* 店舗一覧 */}
+      {/* =========================
+          店舗一覧
+      ========================= */}
 
       <section className="table-area">
 
@@ -1017,6 +1058,7 @@ function App() {
         />
 
       </section>
+
 
     </div>
 
